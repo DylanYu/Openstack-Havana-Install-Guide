@@ -96,7 +96,7 @@ On each node,
 1. Controller Node
 ==================
 
-1.1 Identity service
+1.1. Keystone
 --------------------
 
 * Install the Identity Service::
@@ -121,7 +121,9 @@ On each node,
    # keystone-manage db_sync
    # service keystone restart
 
-* Define an authorization token to use as a shared secret between the Identity Service and other OpenStack services. Use **openssl** to generate a random token and store it in the file *admin_token*::
+* Define an authorization token to use as a shared secret between the Identity Service and other OpenStack services.
+
+  Use **openssl** to generate a random token and store it in the file *admin_token*::
 
    # openssl rand -out admin_token -hex 10
 
@@ -142,7 +144,9 @@ On each node,
    # keystone role-create --name=admin
    # keystone user-role-add --user=admin --tenant=admin --role=admin
 
-  We just created two tenants *admin* and *service*, a user *admin*, a role *admin*. The user *admin* is in *admin* tenant with *admin* role.
+  We just created two tenants *admin* and *service*, a user *admin*, a role *admin*.
+
+  The user *admin* is in *admin* tenant with *admin* role.
 
 * Define services and API endpoints. Replace *the_service_id_above* with the actual service id created in first step::
 
@@ -156,8 +160,13 @@ On each node,
 * Verify the Identity Service installation::
 
    # unset OS_SERVICE_TOKEN OS_SERVICE_ENDPOINT
-   # keystone --os-username=admin --os-password=ADMIN_PASS --os-auth-url=http://controller:35357/v2.0 token-get
-   # keystone --os-username=admin --os-password=ADMIN_PASS --os-tenant-name=admin --os-auth-url=http://controller:35357/v2.0 token-get
+   # keystone --os-username=admin \
+     --os-password=ADMIN_PASS \
+     --os-auth-url=http://controller:35357/v2.0 token-get
+   # keystone --os-username=admin \
+     --os-password=ADMIN_PASS \
+     --os-tenant-name=admin \
+     --os-auth-url=http://controller:35357/v2.0 token-get
 
   You should receive tokens in response.
 
@@ -187,4 +196,140 @@ On each node,
    | 1a466d433c7441ff986bb64536bd434b | admin |   True  | admin@example.com |
    +----------------------------------+-------+---------+-------------------+
 
+1.2. Glance
+-----------------------------
+
+This part assumes you set the appropriate environment variables to your credentials.
+
+If not, just use **source keystonerc**.
+
+* Install the Image Service on the controller node::
+
+   # apt-get install glance
+
+* Edit /etc/glance/glance-api.conf and /etc/glance/glance-registry.conf and change the [DEFAULT] section::
+
+   ...
+   [DEFAULT]
+   ...
+   # SQLAlchemy connection string for the reference implementation
+   # registry server. Any valid SQLAlchemy connection string is fine.
+   # See: http://www.sqlalchemy.org/docs/05/reference/sqlalchemy/connections.html#sqlalchemy.create_engine
+   sql_connection = mysql://glance:GLANCE_DBPASS@controller/glance
+   ...
+
+* Use the password you created to log in as root and create a glance database user::
+
+   # mysql -u root -p
+   mysql> CREATE DATABASE glance;
+   mysql> GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'localhost' IDENTIFIED BY 'GLANCE_DBPASS';
+   mysql> GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'%' IDENTIFIED BY 'GLANCE_DBPASS';
+
+* Create the database tables for the Image Service::
+
+   # glance-manage db_sync
+
+* Create a glance user that the Image Service can use to authenticate with the Identity Service.
+
+  Choose a password and specify an email address for the glance user.
+
+  Use the service tenant and give the user the admin role::
+
+   # keystone user-create --name=glance --pass=GLANCE_PASS --email=glance@example.com
+   # keystone user-role-add --user=glance --tenant=service --role=admin
+
+* Edit /etc/glance/glance-api.conf and /etc/glance/glance-registry.conf and change the [keystone_authtoken] section::
+
+   ...
+   [keystone_authtoken]
+   auth_host = controller
+   auth_port = 35357
+   auth_protocol = http
+   admin_tenant_name = service
+   admin_user = glance
+   admin_password = GLANCE_PASS
+   ...
+
+* Edit /etc/glance/glance-api-paste.ini and /etc/glance/glance-registry-paste.ini to set the following options in the [filter:authtoken] section::
+
+   [filter:authtoken]
+   paste.filter_factory=keystoneclient.middleware.auth_token:filter_factory
+   auth_host=controller
+   admin_user=glance
+   admin_tenant_name=service
+   admin_password=GLANCE_PASS
+
+* Register the Image Service with the Identity Service so that other OpenStack services can locate it.
+
+  Register the service and create the endpoint::
+
+   # keystone service-create --name=glance --type=image --description="Glance Image Service"
+
+* Use the id property returned for the service to create the endpoint::
+
+   # keystone endpoint-create \
+     --service-id=the_service_id_above \
+     --publicurl=http://controller:9292 \
+     --internalurl=http://controller:9292 \
+     --adminurl=http://controller:9292
+
+* Restart the glance service with its new settings::
+
+   # service glance-registry restart
+   # service glance-api restart
+
+Then we try to verify the Image Service Installation.
+
+* Download the image into a dedicated directory::
+
+   $ mkdir images
+   $ cd images/
+   $ wget http://cdn.download.cirros-cloud.net/0.3.1/cirros-0.3.1-x86_64-disk.img
+
+* Upload the image to the Image Service::
+
+   # glance image-create --name="CirrOS 0.3.1" --disk-format=qcow2 \
+     --container-format=bare --is-public=true < cirros-0.3.1-x86_64-disk.img
+
+   +------------------+--------------------------------------+
+   | Property         | Value                                |
+   +------------------+--------------------------------------+
+   | checksum         | d972013792949d0d3ba628fbe8685bce     |
+   | container_format | bare                                 |
+   | created_at       | 2013-11-20T05:03:30                  |
+   | deleted          | False                                |
+   | deleted_at       | None                                 |
+   | disk_format      | qcow2                                |
+   | id               | 0d192c86-1a92-4ac5-97da-f3d95f74e811 |
+   | is_public        | True                                 |
+   | min_disk         | 0                                    |
+   | min_ram          | 0                                    |
+   | name             | CirrOS 0.3.1                         |
+   | owner            | None                                 |
+   | protected        | False                                |
+   | size             | 13147648                             |
+   | status           | active                               |
+   | updated_at       | 2013-11-20T05:03:30                  |
+   +------------------+--------------------------------------+
+
+* Confirm that the image was uploaded and display its attributes::
+
+   # glance image-list
+
+   +--------------------------------------+--------------+-------------+------------------+----------+--------+
+   | ID                                   | Name         | Disk Format | Container Format | Size     | Status |
+   +--------------------------------------+--------------+-------------+------------------+----------+--------+
+   | 0d192c86-1a92-4ac5-97da-f3d95f74e811 | CirrOS 0.3.1 | qcow2       | bare             | 13147648 | active |
+   +--------------------------------------+--------------+-------------+------------------+----------+--------+
+
+1.3. Horizon
+------------
+
+* Install the dashboard on controller node::
+
+   # apt-get install memcached libapache2-mod-wsgi openstack-dashboard
+
+* You can now access the dashboard at http://controller/horizon .
+
+  Login with credentials for any user that you created with the OpenStack Identity Service.
 
