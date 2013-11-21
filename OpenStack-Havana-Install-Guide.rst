@@ -67,7 +67,7 @@ Table of Contents
 
    # mysql_secure_installation
 
-* On any nodes besides the controller node, just install MySQL Python library::
+* On any nodes besides the controller node, just install the MySQL Python library::
 
    # apt-get install python-mysqldb
 
@@ -93,7 +93,7 @@ On each node,
    # apt-get install rabbitmq-server
 
 
-1. Controller Node
+1. Controller
 ==================
 
 1.1. Keystone
@@ -148,7 +148,7 @@ On each node,
 
   The user *admin* is in *admin* tenant with *admin* role.
 
-* Define services and API endpoints. Replace *the_service_id_above* with the actual service id created in first step::
+* Define services and API endpoints. Replace *the_service_id_above* with the actual service id created in first step (similarly hereinafter)::
 
    # keystone service-create --name=keystone --type=identity --description="Keystone Identity Service"
    # keystone endpoint-create \
@@ -332,4 +332,87 @@ Then we try to verify the Image Service Installation.
 * You can now access the dashboard at http://controller/horizon .
 
   Login with credentials for any user that you created with the OpenStack Identity Service.
+
+
+2. Networking
+==================
+
+2.1. Basic setup
+----------------
+
+This part creates required OpenStack components: user, service, database, and endpoint, on the **controller node**.
+
+* Create a neutron database::
+
+   # mysql -u root -p
+   mysql> CREATE DATABASE neutron;
+   mysql> GRANT ALL PRIVILEGES ON neutron.* TO 'neutron'@'localhost' \
+   IDENTIFIED BY 'NEUTRON_DBPASS';
+   mysql> GRANT ALL PRIVILEGES ON neutron.* TO 'neutron'@'%' \
+   IDENTIFIED BY 'NEUTRON_DBPASS';
+
+* Create the required user, service, and endpoint so that Networking can interface with the Identity Service::
+
+   # keystone user-create --name=neutron --pass=NEUTRON_PASS --email=neutron@example.com
+   # keystone user-role-add --user=neutron --tenant=service --role=admin
+   # keystone service-create --name=neutron --type=network \
+     --description="OpenStack Networking Service"
+   # keystone endpoint-create \
+        --service-id the_service_id_above \
+        --publicurl http://controller:9696 \
+        --adminurl http://controller:9696 \
+        --internalurl http://controller:9696
+
+2.2. Install Networking services on a dedicated network node
+------------------------------------------------------------
+
+* Install the OpenStack Networking service on the network node::
+
+   # apt-get install neutron-server neutron-dhcp-agent neutron-plugin-openvswitch-agent neutron-l3-agent
+
+* Edit the /etc/sysctl.conf file, as follows::
+
+   net.ipv4.ip_forward=1
+   net.ipv4.conf.all.rp_filter=0
+   net.ipv4.conf.default.rp_filter=0
+
+  This step enables packet forwarding and disables packet destination filtering so that the network node can coordinate traffic for the VMs.
+
+  To activate changes in the /etc/sysctl.conf file, run the following command::
+
+   # sysctl -p
+
+* Edit the /etc/neutron/neutron.conf file and add these lines to the keystone_authtoken section::
+
+   [keystone_authtoken]
+   auth_host = controller
+   auth_port = 35357
+   auth_protocol = http
+   admin_tenant_name = service
+   admin_user = neutron
+   admin_password = NEUTRON_PASS
+
+* Configure the RabbitMQ access. Edit the /etc/neutron/neutron.conf file to modify the following parameters in the DEFAULT section::
+
+   rabbit_host = controller
+   rabbit_userid = guest
+   rabbit_password = guest
+
+  If you've changed you RabbitMQ password, remeber to modify the value of *rabbit_password*.
+
+* Edit the [database] section in the same file, as follows::
+
+   [database]
+   connection = mysql://neutron:NEUTRON_DBPASS@controller/neutron
+
+* Edit the /etc/neutron/api-paste.ini file and add these lines to the [filter:authtoken] section::
+
+   [filter:authtoken]
+   paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory
+   auth_host=controller
+   auth_uri=http://controller:5000
+   admin_user=neutron
+   admin_tenant_name=service
+   admin_password=NEUTRON_PASS
+
 
