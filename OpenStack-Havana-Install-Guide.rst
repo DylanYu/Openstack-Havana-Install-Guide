@@ -415,4 +415,115 @@ This part creates required OpenStack components: user, service, database, and en
    admin_tenant_name=service
    admin_password=NEUTRON_PASS
 
+Then we start to install the Open vSwitch (OVS) plug-in. Good luck.
+
+* Install the Open vSwitch plug-in and its dependencies::
+
+   # apt-get install neutron-plugin-openvswitch-agent openvswitch-switch
+
+* Start Open vSwitch::
+
+   # service openvswitch-switch start
+
+* Installl the Open vSwitch datapath module and make sure the Open vSwitch module is loaded correctly::
+
+   # apt-get install openvswitch-datapath-source
+   # module-assistant auto-install openvswitch-datapath
+   # modinfo openvswitch
+   
+   filename:       /lib/modules/3.2.0-56-generic/updates/openvswitch/openvswitch.ko
+   version:        1.10.2
+   license:        GPL
+   description:    Open vSwitch switching datapath
+   srcversion:     EBF7178BF66BA8C40E397CB
+   depends:        
+   vermagic:       3.2.0-56-generic SMP mod_unload modversions 
+
+* Add integration and external bridges::
+
+   # ovs-vsctl add-br br-int
+   # ovs-vsctl add-br br-ex
+
+* Add a port (connection) from the EXTERNAL_INTERFACE interface (114.212.189.131 in this guide) to br-ex interface::
+
+   # ovs-vsctl add-port br-ex EXTERNAL_INTERFACE
+
+* Configure the EXTERNAL_INTERFACE without an IP address and in promiscuous mode. Additionally, you must set the newly created br-ex interface to have the IP address that formerly belonged to EXTERNAL_INTERFACE. Edit file /etc/network/interfaces as follows::
+
+   auto lo
+   iface lo inet loopback
+
+   auto eth0
+   iface eth0 inet static
+       address 192.168.0.11
+       netmask 255.255.255.0
+
+   auto eth1
+   iface eth1 inet manual
+   up ifconfig $IFACE 0.0.0.0 up
+   up ip link set $IFACE promisc on
+   down ip link set $IFACE promisc off
+   down ifconfig $IFACE down
+
+   auto br-ex
+   iface br-ex inet static
+       address 114.212.189.131
+       netmask 255.255.255.0
+       gateway 114.212.189.1
+
+  Restart your network service to apply changes.
+
+* Edit the /etc/neutron/l3_agent.ini and /etc/neutron/dhcp_agent.ini files, respectively::
+
+   interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver
+   use_namespaces = False
+
+* Edit the /etc/neutron/neutron.conf file::
+
+   core_plugin = neutron.plugins.openvswitch.ovs_neutron_plugin.OVSNeutronPluginV2
+
+* Configure the OVS plug-in to use GRE tunneling, the br-int integration bridge, the br-tun tunneling bridge, and a local IP for the DATA_INTERFACE tunnel IP (192.168.0.11 in this guide). Edit the /etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini file::
+
+   [ovs]
+   tenant_network_type = gre
+   tunnel_id_ranges = 1:1000
+   enable_tunneling = True
+   integration_bridge = br-int
+   tunnel_bridge = br-tun
+   local_ip = DATA_INTERFACE
+
+* Configure a firewall plug-in. Edit the /etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini file::
+
+   [securitygroup]
+   # Firewall driver for realizing neutron security group function.
+   firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver
+
+* Configure the database connection. Edit the /etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini file::
+
+   [database]
+   sql_connection = mysql://neutron:NEUTRON_DBPASS@controller:3306/neutron
+
+* Restart the OVS plug-in and make sure it starts on boot::
+
+   # service neutron-plugin-openvswitch-agent restart
+
+* List your virtual bridges::
+
+   # ovs-vsctl show
+
+  You should see br-ex, br-int which are created by yourself manually, and br-tun which is created by openvswitch automatically.
+
+Now you've installed and configured a plug-in.
+
+* Use the Dnsmasq plug-in to perform DHCP on the software-defined networks. Edit the /etc/neutron/dhcp_agent.ini file::
+
+   dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq
+
+* Restart Networking::
+
+   # service neutron-dhcp-agent restart
+   # service neutron-l3-agent restart
+
+  If you check the dhcp-agent.log and l3-agent.log in /var/log/neutron, you will see error messages *Skipping unknown group key: firewall_driver* and *Router id is required if not using namespaces*. These may be bugs and you should not worry about them temporarily.
+
 
