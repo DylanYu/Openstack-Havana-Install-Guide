@@ -641,4 +641,79 @@ This section details set up for any node that runs the nova-compute component bu
 
   As you will see, by the information of br-tun, our compute node is now able to sense the networking node through the tunnel.
 
+2.4. Install networking support on a dedicated controller node
+--------------------------------------------------------------
+
+This is for a node which runs the control components of Neutron, but does not run any of the components that provide the underlying functionality (such as the plug-in agent or the L3 agent).
+
+* Install the main Neutron server, Neutron libraries for Python, and the Neutron command-line interface (CLI)::
+
+   # apt-get install neutron-server python-neutronclient
+
+* Configure the core components of Neutron. Edit the /etc/neutron/neutron.conf file::
+
+   [DEFAULT]
+   rpc_backend = neutron.openstack.common.rpc.impl_kombu
+   [keystone_authtoken]
+   auth_host = controller
+   admin_tenant_name = service
+   admin_user = neutron
+   admin_password = NEUTRON_PASS
+   auth_url = http://controller:35357/v2.0
+   auth_strategy = keystone
+
+* Edit the database URL under the [database] section in the above file, to tell Neutron how to connect to the database::
+
+   [database]
+   connection = mysql://neutron:NEUTRON_DBPASS@controller/neutron
+
+* Configure the Neutron copy of the api-paste.ini at /etc/neutron/api-paste.ini file::
+
+   [filter:authtoken]
+   EXISTING_STUFF_HERE
+   admin_tenant_name = service
+   admin_user = neutron
+   admin_password = NEUTRON_PASS
+
+* Install the Open vSwitch plug-in::
+
+   # apt-get install neutron-plugin-openvswitch
+
+  Nothing new to install here. We could just skip this step.
+
+  **Note:** The dedicated controller node does not need to run Open vSwitch or the Open vSwitch agent.
+
+* You must set some common configuration options no matter which networking technology you choose to use with Open vSwitch. You must configure Networking core to use OVS. Edit the /etc/neutron/neutron.conf file::
+
+   core_plugin = neutron.plugins.openvswitch.ovs_neutron_plugin.OVSNeutronPluginV2
+
+* Tell the OVS plug-in to use GRE tunneling. Edit the /etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini file::
+
+   [ovs]
+   tenant_network_type = gre
+   tunnel_id_ranges = 1:1000
+   enable_tunneling = True
+
+* **TO DE DETERMINED**::
+
+  Whether to add firewall and sql connection config in ovs_neutron_plugin.ini.
+
+* Tell Nova about Neutron. Specifically, you must tell Nova that Neutron will be handling networking and the firewall. Edit the /etc/nova/nova.conf file::
+
+   network_api_class=nova.network.neutronv2.api.API
+   neutron_url=http://controller:9696
+   neutron_auth_strategy=keystone
+   neutron_admin_tenant_name=service
+   neutron_admin_username=neutron
+   neutron_admin_password=NEUTRON_PASS
+   neutron_admin_auth_url=http://controller:35357/v2.0
+   firewall_driver=nova.virt.firewall.NoopFirewallDriver
+   security_group_api=neutron
+
+  Regardless of which firewall driver you chose when you configure the network and compute nodes, set this driver as the No-Op firewall. The difference is that this is a *Nova* firewall, and because Neutron handles the Firewall, you must tell Nova not to use one.
+
+* Restart neutron-server::
+
+   # service neutron-server restart
+
 
