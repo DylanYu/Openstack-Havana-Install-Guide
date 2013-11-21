@@ -712,8 +712,125 @@ This is for a node which runs the control components of Neutron, but does not ru
 
   Regardless of which firewall driver you chose when you configure the network and compute nodes, set this driver as the No-Op firewall. The difference is that this is a *Nova* firewall, and because Neutron handles the Firewall, you must tell Nova not to use one.
 
+  **Note:** As we haven't install the Compute service (later in Part 3), the /etc/nova/nova.conf file does not exist. We could install the Compute service in advance to create the file, with the following command::
+
+   # apt-get install nova-novncproxy novnc nova-api \
+     nova-ajax-console-proxy nova-cert nova-conductor \
+     nova-consoleauth nova-doc nova-scheduler \
+     python-novaclient
+
 * Restart neutron-server::
 
    # service neutron-server restart
+
+
+3. Compute
+==============
+
+In this guide, most Compute services run on the controller node and the service that launches virtual machines runs on a dedicated compute node. 
+
+3.1.  Install the Compute controller services
+---------------------------------------------
+
+On the controller node,
+
+* Install these Compute packages, which provide the Compute services that run on the controller node::
+
+   # apt-get install nova-novncproxy novnc nova-api \
+     nova-ajax-console-proxy nova-cert nova-conductor \
+     nova-consoleauth nova-doc nova-scheduler \
+     python-novaclient
+
+* Create a nova database user::
+
+   # mysql -u root -p
+   mysql> CREATE DATABASE nova;
+   mysql> GRANT ALL PRIVILEGES ON nova.* TO 'nova'@'localhost' \
+   IDENTIFIED BY 'NOVA_DBPASS';
+   mysql> GRANT ALL PRIVILEGES ON nova.* TO 'nova'@'%' \
+   IDENTIFIED BY 'NOVA_DBPASS';
+
+* Edit the /etc/nova/nova.conf file and add these lines to the [database] section::
+
+   ...
+   [database]
+   # The SQLAlchemy connection string used to connect to the database
+   connection = mysql://nova:NOVA_DBPASS@controller/nova
+
+* Create the tables for the Compute service::
+
+   # nova-manage db sync
+
+* Edit the /etc/nova/nova.conf file and add these lines to the [DEFAULT] section::
+
+   ...
+   [DEFAULT]
+   ...
+   my_ip=192.168.0.12
+   vncserver_listen=192.168.0.12
+   vncserver_proxyclient_address=192.168.0.12
+
+  The IP address used here is the INTERNAL IP for controller node.
+
+* Create a nova user that Compute uses to authenticate with the Identity Service. Use the *service* tenant and give the user the *admin* role::
+
+   # keystone user-create --name=nova --pass=NOVA_PASS --email=nova@example.com
+   # keystone user-role-add --user=nova --tenant=service --role=admin
+
+* Edit the /etc/nova/nova.conf file and add these lines to the [DEFAULT] section::
+
+   ...
+   [DEFAULT]
+   ...
+   auth_strategy=keystone
+
+* Add the credentials to the /etc/nova/api-paste.ini file. Add these options to the [filter:authtoken] section::
+
+   [filter:authtoken]
+   paste.filter_factory=keystoneclient.middleware.auth_token:filter_factory
+   auth_host=controller
+   auth_port=5000
+   auth_protocol=http
+   auth_uri=http://controller:5000/v2.0
+   admin_tenant_name=service
+   admin_user=nova
+   admin_password=NOVA_PASS
+
+* Register Compute with the Identity Service::
+
+   # keystone service-create --name=nova --type=compute \
+     --description="Nova Compute service"
+
+* Use the id property that is returned to create the endpoint::
+
+   # keystone endpoint-create \
+     --service-id=the_service_id_above \
+     --publicurl=http://controller:8774/v2/%\(tenant_id\)s \
+     --internalurl=http://controller:8774/v2/%\(tenant_id\)s \
+     --adminurl=http://controller:8774/v2/%\(tenant_id\)s
+
+* Set these configuration keys to configure Compute to use the RabbitMQ message broker. Add them to the DEFAULT configuration group in the /etc/nova/nova.conf file::
+
+   rpc_backend = nova.rpc.impl_kombu
+   rabbit_host = controller
+   rabbit_password = guest
+
+* Restart Compute services::
+
+   # service nova-api restart
+   # service nova-cert restart
+   # service nova-consoleauth restart
+   # service nova-scheduler restart
+   # service nova-conductor restart
+   # service nova-novncproxy restart
+
+* To verify your configuration, list available images::
+
+   # nova image-list
+   +--------------------------------------+--------------+--------+--------+
+   | ID                                   | Name         | Status | Server |
+   +--------------------------------------+--------------+--------+--------+
+   | 0d192c86-1a92-4ac5-97da-f3d95f74e811 | CirrOS 0.3.1 | ACTIVE |        |
+   +--------------------------------------+--------------+--------+--------+
 
 
