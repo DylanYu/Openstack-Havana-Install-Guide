@@ -708,7 +708,7 @@ This is for a node which runs the control components of Neutron, but does not ru
    neutron_admin_password=NEUTRON_PASS
    neutron_admin_auth_url=http://controller:35357/v2.0
    firewall_driver=nova.virt.firewall.NoopFirewallDriver
-   security_group_api=neutron
+   security_group_api=nova
 
   Regardless of which firewall driver you chose when you configure the network and compute nodes, set this driver as the No-Op firewall. The difference is that this is a *Nova* firewall, and because Neutron handles the Firewall, you must tell Nova not to use one.
 
@@ -832,5 +832,113 @@ On the controller node,
    +--------------------------------------+--------------+--------+--------+
    | 0d192c86-1a92-4ac5-97da-f3d95f74e811 | CirrOS 0.3.1 | ACTIVE |        |
    +--------------------------------------+--------------+--------+--------+
+
+3.2. Configure a Compute node
+------------------------------
+
+* Install the appropriate packages for the Compute service::
+
+   # apt-get install nova-compute-kvm python-guestfs
+
+  When prompted to create a supermin appliance, respond **yes**.
+
+* Relax the restriction of guestfs::
+
+   # chmod 0644 /boot/vmlinuz*
+
+* Edit the /etc/nova/nova.conf configuration file and add these lines to the appropriate sections::
+
+   ...
+   [DEFAULT]
+   ...
+   auth_strategy=keystone
+
+   rpc_backend = nova.rpc.impl_kombu
+   rabbit_host = controller
+   rabbit_password = guest
+
+   my_ip=192.168.0.13
+   vncserver_listen=0.0.0.0
+   vncserver_proxyclient_address=192.168.0.13
+
+   glance_host=controller
+
+   network_api_class=nova.network.neutronv2.api.API
+   neutron_url=http://controller:9696
+   neutron_auth_strategy=keystone
+   neutron_admin_tenant_name=service
+   neutron_admin_username=neutron
+   neutron_admin_password=NEUTRON_PASS
+   neutron_admin_auth_url=http://controller:35357/v2.0
+   firewall_driver=nova.virt.firewall.NoopFirewallDriver
+   security_group_api=nova
+   ...
+   [database]
+   # The SQLAlchemy connection string used to connect to the database
+   connection = mysql://nova:NOVA_DBPASS@controller/nova
+
+* Edit the /etc/nova/api-paste.ini file to add the credentials to the [filter:authtoken] section::
+
+   [filter:authtoken]
+   paste.filter_factory=keystoneclient.middleware.auth_token:filter_factory
+   auth_host=controller
+   auth_port = 35357
+   auth_protocol = http
+   admin_user=nova
+   admin_tenant_name=service
+   admin_password=NOVA_PASS
+
+* Restart the Compute service::
+
+   # service nova-compute restart
+
+3.3. Launch an instance
+------------------------
+
+* Generate a keypair that consists of a private and public key to be able to launch instances on OpenStack. These keys are injected into the instances to make password-less SSH access to the instance::
+
+   $ ssh-keygen
+   $ cd .ssh
+   $ nova keypair-add --pub_key id_rsa.pub mykey
+
+  To view available keypairs::
+
+   $ nova keypair-list
+   +--------+-------------------------------------------------+
+   |  Name  |                   Fingerprint                   |
+   +--------+-------------------------------------------------+
+   | mykey  | 7a:80:3a:c9:53:00:14:91:94:83:70:b3:2a:6d:da:0b |
+   +--------+-------------------------------------------------+
+
+* To see a list of the available flavors::
+
+   $ nova flavor-list
+   +----+-----------+-----------+------+-----------+------+-------+-------------+-----------+
+   | ID | Name      | Memory_MB | Disk | Ephemeral | Swap | VCPUs | RXTX_Factor | Is_Public |
+   +----+-----------+-----------+------+-----------+------+-------+-------------+-----------+
+   | 1  | m1.tiny   | 512       | 1    | 0         |      | 1     | 1.0         | True      |
+   | 2  | m1.small  | 2048      | 20   | 0         |      | 1     | 1.0         | True      |
+   | 3  | m1.medium | 4096      | 40   | 0         |      | 2     | 1.0         | True      |
+   | 4  | m1.large  | 8192      | 80   | 0         |      | 4     | 1.0         | True      |
+   | 5  | m1.xlarge | 16384     | 160  | 0         |      | 8     | 1.0         | True      |
+   +----+-----------+-----------+------+-----------+------+-------+-------------+-----------+
+
+* Get the ID of the image to use for the instance::
+
+   $ nova image-list
+   +--------------------------------------+--------------+--------+--------+
+   | ID                                   | Name         | Status | Server |
+   +--------------------------------------+--------------+--------+--------+
+   | 0d192c86-1a92-4ac5-97da-f3d95f74e811 | CirrOS 0.3.1 | ACTIVE |        |
+   +--------------------------------------+--------------+--------+--------+
+
+* To use SSH and ping, you must configure security group rules::
+
+   # nova secgroup-add-rule default tcp 22 22 0.0.0.0/0
+   # nova secgroup-add-rule default icmp -1 -1 0.0.0.0/0
+
+* Launch the instance::
+
+   nova boot --flavor 1 --key_name mykey --image 0d192c86-1a92-4ac5-97da-f3d95f74e811 --security_group default cirrOS
 
 
