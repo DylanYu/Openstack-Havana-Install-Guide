@@ -391,6 +391,10 @@ This part creates required OpenStack components: user, service, database, and en
    admin_tenant_name = service
    admin_user = neutron
    admin_password = NEUTRON_PASS
+   auth_url=http://controller:35357/v2.0
+   auth_strategy=keystone
+
+  **Note:** You MUST configure *auth_url* to point to keystone endpoint.
 
 * Configure the RabbitMQ access. Edit the /etc/neutron/neutron.conf file to modify the following parameters in the DEFAULT section::
 
@@ -498,7 +502,7 @@ Then we start to install the Open vSwitch (OVS) plug-in. Good luck.
    # Firewall driver for realizing neutron security group function.
    firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver
 
-* Configure the database connection. Edit the /etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini file::
+* Configure the database connection. Edit the [database] section in the above file (This step is missing in the offical installation guide)::
 
    [database]
    sql_connection = mysql://neutron:NEUTRON_DBPASS@controller:3306/neutron
@@ -525,5 +529,116 @@ Now you've installed and configured a plug-in.
    # service neutron-l3-agent restart
 
   If you check the dhcp-agent.log and l3-agent.log in /var/log/neutron, you will see error messages *Skipping unknown group key: firewall_driver* and *Router id is required if not using namespaces*. These may be bugs and you should not worry about them temporarily.
+
+2.3. Install networking support on a dedicated compute node
+-----------------------------------------------------------
+
+This section details set up for any node that runs the nova-compute component but does not run the full network stack.
+
+* Disable packet destination filtering (route verification) to let the networking services route traffic to the VMs. Edit the /etc/sysctl.conf file::
+
+   net.ipv4.conf.all.rp_filter=0
+   net.ipv4.conf.default.rp_filter=0
+
+* Install the Open vSwitch plug-in and its dependencies::
+
+   # apt-get install neutron-plugin-openvswitch-agent openvswitch-switch openvswitch-datapath-dkms
+
+* Add the br-int integration bridge, which connects to the VMs::
+
+   # ovs-vsctl add-br br-int
+
+* Restart Open vSwitch::
+
+   # service openvswitch-switch restart
+
+* You must configure Networking core to use OVS. Edit the /etc/neutron/neutron.conf file::
+
+   core_plugin = neutron.plugins.openvswitch.ovs_neutron_plugin.OVSNeutronPluginV2
+
+* Tell the OVS plug-in to use GRE tunneling with a br-int integration bridge, a br-tun tunneling bridge, and a local IP for the tunnel of DATA_INTERFACE's IP (192.168.0.13 in this guide). Edit the /etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini file::
+
+   [ovs]
+   tenant_network_type = gre
+   tunnel_id_ranges = 1:1000
+   enable_tunneling = True
+   integration_bridge = br-int
+   tunnel_bridge = br-tun
+   local_ip = DATA_INTERFACE_IP
+
+* Configure a firewall plug-in. Edit the /etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini file::
+
+   [securitygroup]
+   # Firewall driver for realizing neutron security group function.
+   firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver
+
+* Configure the database connection. Edit the [database] section in the above file::
+
+   [database]
+   sql_connection = mysql://neutron:NEUTRON_DBPASS@controller:3306/neutron
+
+* Configure the core components of Neutron. Edit the /etc/neutron/neutron.conf file::
+
+   [DEFAULT]
+   rpc_backend = neutron.openstack.common.rpc.impl_kombu
+   rabbit_host = controller
+   # Change the following settings if you're not using the default RabbitMQ configuration
+   #rabbit_port = 5672
+   #rabbit_userid = guest
+   #rabbit_password = guest
+   [keystone_authtoken]
+   auth_host = controller
+   admin_tenant_name = service
+   admin_user = neutron
+   admin_password = NEUTRON_PASS
+   auth_url = http://controller:35357/v2.0
+   auth_strategy = keystone
+
+* Edit the database URL under the [database] section in the above file, to tell Neutron how to connect to the database::
+
+   [database]
+   sql_connection = mysql://neutron:NEUTRON_DBPASS@controller/neutron
+
+* Edit the /etc/neutron/api-paste.ini file and add these lines to the [filter:authtoken] section::
+
+   [filter:authtoken]
+   paste.filter_factory = keystoneclient.middleware.auth_token:filter_factory
+   auth_host=controller
+   admin_user=neutron
+   admin_tenant_name=service
+   admin_password=NEUTRON_PASS
+
+* Restart the Neutron Open vSwitch agent::
+
+   # service neutron-plugin-openvswitch-agent restart
+
+* Verify your configuration with the following command::
+
+   # ovs-vsctl show
+
+   e233a600-2486-4273-9f7a-a62b11ddd0d2
+       Bridge br-tun
+           Port "gre-1"
+               Interface "gre-1"
+                   type: gre
+                   options: {in_key=flow, local_ip="192.168.0.13", out_key=flow, remote_ip="192.168.0.11"}
+           Port br-tun
+               Interface br-tun
+                   type: internal
+           Port patch-int
+               Interface patch-int
+                   type: patch
+                   options: {peer=patch-tun}
+       Bridge br-int
+           Port br-int
+               Interface br-int
+                   type: internal
+           Port patch-tun
+               Interface patch-tun
+                   type: patch
+                   options: {peer=patch-int}
+       ovs_version: "1.10.2"
+
+  As you will see, by the information of br-tun, our compute node is now able to sense the networking node through the tunnel.
 
 
