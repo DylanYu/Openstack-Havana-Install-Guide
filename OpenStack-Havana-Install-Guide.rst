@@ -8,9 +8,9 @@ Table of Contents
 ::
 
   0. Basic Configuration
-  1. Controller Node
-  2. Networking Node
-  3. Compute Node
+  1. Controller
+  2. Networking
+  3. Compute
 
 
 0. Basic Configuration
