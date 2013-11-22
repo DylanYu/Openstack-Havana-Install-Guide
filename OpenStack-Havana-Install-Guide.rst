@@ -482,6 +482,14 @@ Then we start to install the Open vSwitch (OVS) plug-in. Good luck.
    interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver
    use_namespaces = False
 
+* Use neutron to create a virtual router::
+
+   neutron router-create MY_ROUTER
+
+* Set the router id prompted above in /etc/neutron/l3_agent.ini::
+
+   router_id = ROUTER_ID
+
 * Edit the /etc/neutron/neutron.conf file::
 
    core_plugin = neutron.plugins.openvswitch.ovs_neutron_plugin.OVSNeutronPluginV2
@@ -528,7 +536,7 @@ Now you've installed and configured a plug-in.
    # service neutron-dhcp-agent restart
    # service neutron-l3-agent restart
 
-  If you check the dhcp-agent.log and l3-agent.log in /var/log/neutron, you will see error messages *Skipping unknown group key: firewall_driver* and *Router id is required if not using namespaces*. These may be bugs and you should not worry about them temporarily.
+  If you check the dhcp-agent.log and l3-agent.log in /var/log/neutron, you will see error messages *Skipping unknown group key: firewall_driver*. These may be bugs and you should not worry about them temporarily.
 
 2.3. Install networking support on a dedicated compute node
 -----------------------------------------------------------
