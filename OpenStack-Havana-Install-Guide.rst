@@ -325,6 +325,9 @@ Then we try to verify the Image Service Installation.
 1.3. Horizon
 ------------
 
+**Note:** It seems that Horizon will automatically scan services we've installed, and those not yet installed will not be supported in Horizon (You will get a 500 error if you try to access the service), **even if** you install them later. This is not confirmed but we recommend you install Horizon after you have installed ALL services you want.
+
+
 * Install the dashboard on controller node::
 
    # apt-get install memcached libapache2-mod-wsgi openstack-dashboard
