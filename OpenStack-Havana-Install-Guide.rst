@@ -866,6 +866,9 @@ On the controller node,
    rabbit_password = guest
 
    my_ip=192.168.0.13
+   novnc_enable=true
+   # The address for novncproxy_base_url MUST be controller's EXTERNAL address
+   novncproxy_base_url=http://114.212.189.132:6080/vnc_auto.html
    vncserver_listen=0.0.0.0
    vncserver_proxyclient_address=192.168.0.13
 
@@ -884,6 +887,8 @@ On the controller node,
    [database]
    # The SQLAlchemy connection string used to connect to the database
    connection = mysql://nova:NOVA_DBPASS@controller/nova
+
+  The address for *novncproxy_base_url* MUST be controller's EXTERNAL (114.212.189.132)
 
 * Edit the /etc/nova/api-paste.ini file to add the credentials to the [filter:authtoken] section::
 
