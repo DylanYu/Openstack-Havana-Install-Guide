@@ -891,7 +891,9 @@ On the controller node,
    # The SQLAlchemy connection string used to connect to the database
    connection = mysql://nova:NOVA_DBPASS@controller/nova
 
-  The address for *novncproxy_base_url* MUST be controller's EXTERNAL (114.212.189.132)
+  The address for *novncproxy_base_url* MUST be controller's EXTERNAL (114.212.189.132).
+
+  **TODO:** Explain the reason.
 
 * Edit the /etc/nova/api-paste.ini file to add the credentials to the [filter:authtoken] section::
 
