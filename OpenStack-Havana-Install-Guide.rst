@@ -959,4 +959,23 @@ On the controller node,
 
    nova boot --flavor 1 --key_name mykey --image 0d192c86-1a92-4ac5-97da-f3d95f74e811 --security_group default cirrOS
 
+* Network troubleshooting::
 
+  After you have created your enternal and internal networks and assigned a floating IP to your instance, you may ssh and ping the instance but can not reach the outside network from inside the instance.
+  
+  You can solve this problem by editing iptables in the networking node::
+  
+   $ iptables-save > iptables_backup
+   $ vi iptables_backup
+   
+  Find the following line and comment it out::
+  
+   # -A neutron-l3-agent-POSTROUTING ! -i qg-3d057a22-e7 ! -o qg-3d057a22-e7 -m conntrack ! --ctstate DNAT -j ACCEPT
+  
+  Save the file and restore you iptables::
+  
+   $ iptables-restore < iptables_backup
+
+  Now your instance has the full internet access.
+  
+  **TODO:** Explain the reason and move this part to an operation guide.
