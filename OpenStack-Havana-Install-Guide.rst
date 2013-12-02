@@ -250,7 +250,7 @@ If not, just use **source keystonerc**.
    admin_password = GLANCE_PASS
    ...
 
-* Edit /etc/glance/glance-api-paste.ini and /etc/glance/glance-registry-paste.ini to set the following options in the [filter:authtoken] section::
+* Edit /etc/glance/glance-api-paste.ini and /etc/glance/glance-registry-paste.ini to set the following options in the [filter:authtoken] section. Leave any other existing option as it is::
 
    [filter:authtoken]
    paste.filter_factory=keystoneclient.middleware.auth_token:filter_factory
