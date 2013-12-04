@@ -955,9 +955,17 @@ On the controller node,
    # nova secgroup-add-rule default tcp 22 22 0.0.0.0/0
    # nova secgroup-add-rule default icmp -1 -1 0.0.0.0/0
 
+* Create a network:
+
+  **TODO:** Steps to create a network using neutron, either by commands or Horizon.
+
+  Currently you could refer to `UniredStack's tutorial <http://www.ustack.com/blog/neutron_intro/>`_ (Chinese) or official `Neutron deployment use cases <http://docs.openstack.org/havana/install-guide/install/apt/content/neutron-deploy-use-cases.html>`_.
+
 * Launch the instance::
 
    nova boot --flavor 1 --key_name mykey --image 0d192c86-1a92-4ac5-97da-f3d95f74e811 --security_group default cirrOS
+
+  You don't need to specify the network id for instance if you just created ONE network.
 
 * Network troubleshooting::
 
