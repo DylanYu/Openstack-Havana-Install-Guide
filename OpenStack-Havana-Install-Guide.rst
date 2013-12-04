@@ -963,9 +963,25 @@ On the controller node,
 
 * Launch the instance::
 
-   nova boot --flavor 1 --key_name mykey --image 0d192c86-1a92-4ac5-97da-f3d95f74e811 --security_group default cirrOS
+   # nova boot --flavor 1 --key_name mykey --image 0d192c86-1a92-4ac5-97da-f3d95f74e811 --security_group default cirrOS
 
   You don't need to specify the network id for instance if you just created ONE network.
+  
+* List your instance::
+
+   # nova list
+   
+   +--------------------------------------+---------------------+--------+------------+-------------+-----------------------+
+   | ID                                   | Name                | Status | Task State | Power State | Networks              |
+   +--------------------------------------+---------------------+--------+------------+-------------+-----------------------+
+   | 0e6590ed-cc1b-469a-99ea-b48881c39590 | ubuntu_from_command | ACTIVE | None       | Running     | InternelNet=10.10.0.2 |
+   +--------------------------------------+---------------------+--------+------------+-------------+-----------------------+
+   
+* SSH to your instance::
+
+   $ ssh cirros@10.10.0.2
+  
+  The password for user cirros is *cubswin:)*
 
 * Network troubleshooting::
 
