@@ -961,21 +961,33 @@ On the controller node,
 
   Currently you could refer to `UniredStack's tutorial <http://www.ustack.com/blog/neutron_intro/>`_ (Chinese) or official `Neutron deployment use cases <http://docs.openstack.org/havana/install-guide/install/apt/content/neutron-deploy-use-cases.html>`_.
 
-* Launch the instance::
+* List your networks::
 
-   # nova boot --flavor 1 --key_name mykey --image 0d192c86-1a92-4ac5-97da-f3d95f74e811 --security_group default cirrOS
+   # neutron net-list
 
-  You don't need to specify the network id for instance if you just created ONE network.
+     +--------------------------------------+--------------+-------------------------------------------------------+
+     | id                                   | name         | subnets                                               |
+     +--------------------------------------+--------------+-------------------------------------------------------+
+     | 17db0343-51f8-4ecf-b316-69592116dcf6 | External_Net | e1635573-b095-4c07-8f21-eb694310b97c 114.212.189.0/24 |
+     | 909b5bff-9ac6-4470-a5b0-07b7df51a08c | Internal_Net | bb9684c2-f3fe-4e99-8d47-44fe7636697d 10.10.0.0/24     |
+     +--------------------------------------+--------------+-------------------------------------------------------+
+
+* Launch the instance in *Internal_Net*::
+
+   # nova boot --flavor 1 --key_name mykey \
+     --image 0d192c86-1a92-4ac5-97da-f3d95f74e811 \
+     --nic net-id=909b5bff-9ac6-4470-a5b0-07b7df51a08c \
+     --security_group default cirrOS
   
 * List your instance::
 
    # nova list
    
-   +--------------------------------------+---------------------+--------+------------+-------------+-----------------------+
-   | ID                                   | Name                | Status | Task State | Power State | Networks              |
-   +--------------------------------------+---------------------+--------+------------+-------------+-----------------------+
-   | 0e6590ed-cc1b-469a-99ea-b48881c39590 | ubuntu_from_command | ACTIVE | None       | Running     | InternelNet=10.10.0.2 |
-   +--------------------------------------+---------------------+--------+------------+-------------+-----------------------+
+   +--------------------------------------+--------+--------+------------+-------------+------------------------+
+   | ID                                   | Name   | Status | Task State | Power State | Networks               |
+   +--------------------------------------+--------+--------+------------+-------------+------------------------+
+   | 0e6590ed-cc1b-469a-99ea-b48881c39590 | cirrOS | ACTIVE | None       | Running     | Internel_Net=10.10.0.2 |
+   +--------------------------------------+--------+--------+------------+-------------+------------------------+
    
 * SSH to your instance::
 
