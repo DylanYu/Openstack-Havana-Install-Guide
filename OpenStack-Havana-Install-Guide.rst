@@ -1005,7 +1005,7 @@ On the controller node,
 
 * Network troubleshooting::
 
-  After you have created your enternal and internal networks and assigned a floating IP to your instance, you may ssh and ping the instance but can not reach the outside network from inside the instance.
+  After you have created your external and internal networks and assigned a floating IP to your instance, you may ssh and ping the instance but can not reach the outside network from inside the instance.
   
   You can solve this problem by editing iptables in the networking node::
   
