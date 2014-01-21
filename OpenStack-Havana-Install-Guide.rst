@@ -2,6 +2,14 @@
 OpenStack Havana Installation Guide
 ===================================
 
+:Version: 1.0
+:Source: https://github.com/DylanYu/Openstack-Havana-Install-Guide
+
+Author
+======
+
+Dongliang Yu <yudl.nju@gmail.com>
+
 Table of Contents
 =================
 
