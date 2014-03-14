@@ -9,6 +9,7 @@ Author
 ======
 
 Dongliang Yu <yudl.nju@gmail.com>
+Jian Zheng <anthony0859@gmail.com>
 
 Table of Contents
 =================
@@ -330,7 +331,130 @@ Then we try to verify the Image Service Installation.
    | 0d192c86-1a92-4ac5-97da-f3d95f74e811 | CirrOS 0.3.1 | qcow2       | bare             | 13147648 | active |
    +--------------------------------------+--------------+-------------+------------------+----------+--------+
 
-1.3. Horizon
+1.3. Cinder
+------------
+**Note:** We configure and install the Block Storage Service on controller node.
+
+* Install the appropriate packages for the Block Storage Service::
+   
+   # apt-get install cinder-api cinder-scheduler
+
+* Edit the /etc/cinder/cinder.conf file and change the [database] section::
+  
+   [database]
+   ...
+   connection = mysql://cinder:CINDER_DBPASS@controller/cinder
+
+* Use the password that you set to log in as root to create a cinder database::
+
+   # mysql -u root -p
+   mysql> CREATE DATABASE cinder;
+   mysql> GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'localhost' \
+   IDENTIFIED BY 'CINDER_DBPASS';
+   mysql> GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'%' \
+   IDENTIFIED BY 'CINDER_DBPASS';   
+
+* Create the database tables for the Block Storage Service::
+
+   # cinder-manage db sync
+   
+* Create a cinder user::
+   
+   # keystone user-create --name=cinder --pass=CINDER_PASS --email=cinder@example.com
+   # keystone user-role-add --user=cinder --tenant=service --role=admin
+
+* Add the credentials to the file /etc/cinder/api-paste.ini::
+   
+   [filter:authtoken]
+   paste.filter_factory=keystoneclient.middleware.auth_token:filter_factory
+   auth_host=controller
+   auth_port = 35357
+   auth_protocol = http
+   auth_uri = http://controller:5000
+   admin_tenant_name=service
+   admin_user=cinder
+   admin_password=CINDER_PASS
+
+* Edit /etc/cinder/cinder.conf file. Replace RABBIT_PASS with the password you chose for RabbitMQ::
+   
+   [DEFAULT]
+   ...
+   rpc_backend = cinder.openstack.common.rpc.impl_kombu
+   rabbit_host = controller
+   rabbit_port = 5672
+   rabbit_userid = guest
+   rabbit_password = guest
+
+* Register the Block Storage Service with the Identity Service::
+   
+   # keystone service-create --name=cinder --type=volume \
+   --description="Cinder Volume Service"
+   
+* Use the id property returned and use it to create the endpoint::
+   
+   # keystone endpoint-create \
+   --service-id=the_service_id_above \
+   --publicurl=http://controller:8776/v1/%\(tenant_id\)s \
+   --internalurl=http://controller:8776/v1/%\(tenant_id\)s \
+   --adminurl=http://controller:8776/v1/%\(tenant_id\)s
+
+* Register a service and endpoint for version 2 of the Block Storage Service API::
+   
+   # keystone service-create --name=cinderv2 --type=volumev2 \
+   --description="Cinder Volume Service V2"
+
+* Use the id property returned and use it to create the endpoint::
+
+   # keystone endpoint-create \
+   --service-id=the_service_id_above \
+   --publicurl=http://controller:8776/v2/%\(tenant_id\)s \
+   --internalurl=http://controller:8776/v2/%\(tenant_id\)s \
+   --adminurl=http://controller:8776/v2/%\(tenant_id\)s
+
+* Restart the cinder service with its new settings::
+   
+   # service cinder-scheduler restart
+   # service cinder-api restart
+
+* Install the cinder-volume package::
+  
+   # apt-get install cinder-volume
+
+* Install the required LVM packages::
+ 
+   # apt-get install lvm2
+
+* Create a 10GB test loopfile::
+ 
+   # dd if=/dev/zero of=cinder-volumes bs=1 count=0 seek=10G
+
+* Mount it::
+
+   # sudo losetup /dev/loop2 cinder-volumes
+
+* Edit the /etc/lvm/lvm.conf file and change the device section::
+ 
+   devices {
+   ...
+   filter = [ "a/sdc5*/","a/loop2*/", "r/.*/" ]
+   ...
+   }
+
+* Initialise it as an lvm 'physical volume', then create the lvm 'volume group'::
+ 
+   # pvcreate /dev/loop2
+   # vgcreate cinder-volumes /dev/loop2
+
+* Check if our volume is created::
+
+   # pvscan
+
+* Restart the cinder service with its new settings::
+ 
+   # service cinder-volume restart
+   # service tgt restart
+
+1.4. Horizon
 ------------
 
 **Note:** It seems that Horizon will automatically scan services we've installed, and those not yet installed will not be supported in Horizon (You will get a 500 error if you try to access the service), **even if** you install them later. This is not confirmed but we recommend you install Horizon after you have installed ALL services you want.
