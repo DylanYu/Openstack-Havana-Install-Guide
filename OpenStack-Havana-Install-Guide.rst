@@ -1091,7 +1091,7 @@ On the controller node,
 
   **TODO:** Steps to create a network using neutron, either by commands or Horizon.
 
-  Currently you could refer to `UniredStack's tutorial <http://www.ustack.com/blog/neutron_intro/>`_ (Chinese) or official `Neutron deployment use cases <http://docs.openstack.org/havana/install-guide/install/apt/content/neutron-deploy-use-cases.html>`_.
+  Currently you could refer to `UnitedStack's tutorial <http://www.ustack.com/blog/neutron_intro/>`_ (Chinese) or official `Neutron deployment use cases <http://docs.openstack.org/havana/install-guide/install/apt/content/neutron-deploy-use-cases.html>`_.
 
 * List your networks::
 
